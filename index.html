@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Quiniela Mundial 2026</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #311042 100%);
+            background-attachment: fixed;
+            color: #f8fafc;
+            min-height: 100vh;
+        }
+        /* Ocultar flechas en los inputs numéricos */
+        input[type="number"]::-webkit-inner-spin-button, 
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
+
+        /* Patrón geométrico estilo Copa Mundial */
+        .worldcup-pattern {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 80% 70%, rgba(236, 72, 153, 0.1) 0%, transparent 45%),
+                radial-gradient(circle at 50% 10%, rgba(16, 185, 129, 0.08) 0%, transparent 35%);
+            z-index: -1;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="worldcup-pattern"></div>
+    <div id="root"></div>
+
+    <script type="module" id="firebase-init">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, getDocs, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        window.FirebaseApp = {
+            initializeApp, getAuth, signInAnonymously, signInWithCustomToken, 
+            onAuthStateChanged, getFirestore, doc, setDoc, getDoc, getDocs, collection, onSnapshot
+        };
+        
+        window.dispatchEvent(new Event('firebase-ready'));
+    </script>
+
+    <script type="text/babel">
+        const WORLD_CUP_GROUPS = {
+            A: ["México", "Sudáfrica", "Corea del Sur", "Chequia"],
+            B: ["Canadá", "Bosnia y H.", "Qatar", "Suiza"],
+            C: ["Brasil", "Marruecos", "Haití", "Escocia"],
+            D: ["Estados Unidos", "Paraguay", "Australia", "Turquía"],
+            E: ["Alemania", "Curazao", "Costa de Marfil", "Ecuador"],
+            F: ["Países Bajos", "Japón", "Suecia", "Túnez"],
+            G: ["Bélgica", "Egipto", "Irán", "Nueva Zelanda"],
+            H: ["España", "Cabo Verde", "Arabia Saudita", "Uruguay"],
+            I: ["Francia", "Senegal", "Irak", "Noruega"],
+            J: ["Argentina", "Argelia", "Austria", "Jordania"],
+            K: ["Portugal", "RD Congo", "Uzbekistán", "Colombia"],
+            L: ["Inglaterra", "Croacia", "Ghana", "Panamá"]
+        };
+
+        // Mapeo ISO de países para cargar banderas vectoriales SVG sin fallos de sistema
+        const COUNTRY_FLAGS_CODES = {
+            "México": "mx", "Sudáfrica": "za", "Corea del Sur": "kr", "Chequia": "cz",
+            "Canadá": "ca", "Bosnia y H.": "ba", "Qatar": "qa", "Suiza": "ch",
+            "Brasil": "br", "Marruecos": "ma", "Haití": "ht", "Escocia": "gb-sct",
+            "Estados Unidos": "us", "Paraguay": "py", "Australia": "au", "Turquía": "tr",
+            "Alemania": "de", "Curazao": "cw", "Costa de Marfil": "ci", "Ecuador": "ec",
+            "Países Bajos": "nl", "Japón": "jp", "Suecia": "se", "Túnez": "tn",
+            "Bélgica": "be", "Egipto": "eg", "Irán": "ir", "Nueva Zelanda": "nz",
+            "España": "es", "Uruguay": "uy", "Arabia Saudita": "sa", "Cabo Verde": "cv",
+            "Francia": "fr", "Senegal": "sn", "Noruega": "no", "Irak": "iq",
+            "Argentina": "ar", "Argelia": "dz", "Austria": "at", "Jordania": "jo",
+            "Portugal": "pt", "Colombia": "co", "Uzbekistán": "uz", "RD Congo": "cd",
+            "Inglaterra": "gb-eng", "Croacia": "hr", "Ghana": "gh", "Panamá": "pa"
+        };
+
+        const J1_MATCHES = [
+            { group: "A", homeIdx: 0, awayIdx: 1, date: "11 de Junio" }, // México vs Sudáfrica
+            { group: "A", homeIdx: 2, awayIdx: 3, date: "11 de Junio" }, // Corea del Sur vs Chequia
+            { group: "B", homeIdx: 0, awayIdx: 1, date: "12 de Junio" }, // Canadá vs Bosnia y H.
+            { group: "D", homeIdx: 0, awayIdx: 1, date: "12 de Junio" }, // Estados Unidos vs Paraguay
+            { group: "B", homeIdx: 2, awayIdx: 3, date: "13 de Junio" }, // Qatar vs Suiza
+            { group: "C", homeIdx: 0, awayIdx: 1, date: "13 de Junio" }, // Brasil vs Marruecos
+            { group: "C", homeIdx: 2, awayIdx: 3, date: "13 de Junio" }, // Haití vs Escocia
+            { group: "D", homeIdx: 2, awayIdx: 3, date: "13 de Junio" }, // Australia vs Turquía
+            { group: "E", homeIdx: 0, awayIdx: 1, date: "14 de Junio" }, // Alemania vs Curazao
+            { group: "F", homeIdx: 0, awayIdx: 1, date: "14 de Junio" }, // Países Bajos vs Japón
+            { group: "E", homeIdx: 2, awayIdx: 3, date: "14 de Junio" }, // Costa de Marfil vs Ecuador
+            { group: "F", homeIdx: 2, awayIdx: 3, date: "14 de Junio" }, // Suecia vs Túnez
+            { group: "H", homeIdx: 0, awayIdx: 1, date: "15 de Junio" }, // España vs Cabo Verde
+            { group: "G", homeIdx: 0, awayIdx: 1, date: "15 de Junio" }, // Bélgica vs Egipto
+            { group: "H", homeIdx: 2, awayIdx: 3, date: "15 de Junio" }, // Arabia Saudita vs Uruguay
+            { group: "G", homeIdx: 2, awayIdx: 3, date: "15 de Junio" }, // Irán vs Nueva Zelanda
+            { group: "I", homeIdx: 0, awayIdx: 1, date: "16 de Junio" }, // Francia vs Senegal
+            { group: "I", homeIdx: 2, awayIdx: 3, date: "16 de Junio" }, // Irak vs Noruega
+            { group: "J", homeIdx: 0, awayIdx: 1, date: "16 de Junio" }, // Argentina vs Argelia
+            { group: "J", homeIdx: 2, awayIdx: 3, date: "16 de Junio" }, // Austria vs Jordania
+            { group: "K", homeIdx: 0, awayIdx: 1, date: "17 de Junio" }, // Portugal vs RD Congo
+            { group: "L", homeIdx: 0, awayIdx: 1, date: "17 de Junio" }, // Inglaterra vs Croacia
+            { group: "L", homeIdx: 2, awayIdx: 3, date: "17 de Junio" }, // Ghana vs Panamá
+            { group: "K", homeIdx: 2, awayIdx: 3, date: "17 de Junio" }  // Uzbekistán vs Colombia
+        ];
+
+        const J2_MATCHES = [
+            { group: "A", homeIdx: 3, awayIdx: 1, date: "18 de Junio" }, // Chequia vs Sudáfrica
+            { group: "B", homeIdx: 3, awayIdx: 1, date: "18 de Junio" }, // Suiza vs Bosnia y H.
+            { group: "B", homeIdx: 0, awayIdx: 2, date: "18 de Junio" }, // Canadá vs Qatar
+            { group: "A", homeIdx: 0, awayIdx: 2, date: "18 de Junio" }, // México vs Corea del Sur
+            { group: "C", homeIdx: 0, awayIdx: 2, date: "19 de Junio" }, // Brasil vs Haití
+            { group: "C", homeIdx: 3, awayIdx: 1, date: "19 de Junio" }, // Escocia vs Marruecos
+            { group: "D", homeIdx: 3, awayIdx: 1, date: "19 de Junio" }, // Turquía vs Paraguay
+            { group: "D", homeIdx: 0, awayIdx: 2, date: "19 de Junio" }, // Estados Unidos vs Australia
+            { group: "F", homeIdx: 0, awayIdx: 2, date: "20 de Junio" }, // Países Bajos vs Suecia
+            { group: "E", homeIdx: 0, awayIdx: 2, date: "20 de Junio" }, // Alemania vs Costa de Marfil
+            { group: "E", homeIdx: 3, awayIdx: 1, date: "20 de Junio" }, // Ecuador vs Curazao
+            { group: "F", homeIdx: 3, awayIdx: 1, date: "20 de Junio" }, // Túnez vs Japón
+            { group: "H", homeIdx: 0, awayIdx: 2, date: "21 de Junio" }, // España vs Arabia Saudita
+            { group: "G", homeIdx: 0, awayIdx: 2, date: "21 de Junio" }, // Bélgica vs Irán
+            { group: "H", homeIdx: 3, awayIdx: 1, date: "21 de Junio" }, // Uruguay vs Cabo Verde
+            { group: "G", homeIdx: 3, awayIdx: 1, date: "21 de Junio" }, // Nueva Zelanda vs Egipto
+            { group: "I", homeIdx: 3, awayIdx: 1, date: "22 de Junio" }, // Noruega vs Senegal
+            { group: "I", homeIdx: 0, awayIdx: 2, date: "22 de Junio" }, // Francia vs Irak
+            { group: "J", homeIdx: 0, awayIdx: 2, date: "22 de Junio" }, // Argentina vs Austria
+            { group: "J", homeIdx: 3, awayIdx: 1, date: "22 de Junio" }, // Jordania vs Argelia
+            { group: "L", homeIdx: 0, awayIdx: 2, date: "23 de Junio" }, // Inglaterra vs Ghana
+            { group: "L", homeIdx: 3, awayIdx: 1, date: "23 de Junio" }, // Panamá vs Croacia
+            { group: "K", homeIdx: 0, awayIdx: 2, date: "23 de Junio" }, // Portugal vs Uzbekistán
+            { group: "K", homeIdx: 3, awayIdx: 1, date: "23 de Junio" }  // Colombia vs RD Congo
+        ];
+
+        const J3_MATCHES = [
+            { group: "C", homeIdx: 3, awayIdx: 0, date: "24 de Junio" }, // Escocia vs Brasil
+            { group: "C", homeIdx: 1, awayIdx: 2, date: "24 de Junio" }, // Marruecos vs Haití
+            { group: "B", homeIdx: 3, awayIdx: 0, date: "24 de Junio" }, // Suiza vs Canadá
+            { group: "B", homeIdx: 1, awayIdx: 2, date: "24 de Junio" }, // Bosnia y H. vs Qatar
+            { group: "A", homeIdx: 3, awayIdx: 0, date: "24 de Junio" }, // Chequia vs México
+            { group: "A", homeIdx: 1, awayIdx: 2, date: "24 de Junio" }, // Sudáfrica vs Corea del Sur
+            { group: "E", homeIdx: 1, awayIdx: 2, date: "25 de Junio" }, // Curazao vs Costa de Marfil
+            { group: "E", homeIdx: 3, awayIdx: 0, date: "25 de Junio" }, // Ecuador vs Alemania
+            { group: "F", homeIdx: 1, awayIdx: 2, date: "25 de Junio" }, // Japón vs Suecia
+            { group: "F", homeIdx: 3, awayIdx: 0, date: "25 de Junio" }, // Túnez vs Países Bajos
+            { group: "D", homeIdx: 3, awayIdx: 0, date: "25 de Junio" }, // Turquía vs Estados Unidos
+            { group: "D", homeIdx: 1, awayIdx: 2, date: "25 de Junio" }, // Paraguay vs Australia
+            { group: "I", homeIdx: 3, awayIdx: 0, date: "26 de Junio" }, // Noruega vs Francia
+            { group: "I", homeIdx: 1, awayIdx: 2, date: "26 de Junio" }, // Senegal vs Irak
+            { group: "G", homeIdx: 1, awayIdx: 2, date: "26 de Junio" }, // Egipto vs Irán
+            { group: "G", homeIdx: 3, awayIdx: 0, date: "26 de Junio" }, // Nueva Zelanda vs Bélgica
+            { group: "H", homeIdx: 1, awayIdx: 2, date: "26 de Junio" }, // Cabo Verde vs Arabia Saudita
+            { group: "H", homeIdx: 3, awayIdx: 0, date: "26 de Junio" }, // Uruguay vs España
+            { group: "L", homeIdx: 3, awayIdx: 0, date: "27 de Junio" }, // Panamá vs Inglaterra
+            { group: "L", homeIdx: 1, awayIdx: 2, date: "27 de Junio" }, // Croacia vs Ghana
+            { group: "J", homeIdx: 1, awayIdx: 2, date: "27 de Junio" }, // Argelia vs Austria
+            { group: "J", homeIdx: 3, awayIdx: 0, date: "27 de Junio" }, // Jordania vs Argentina
+            { group: "K", homeIdx: 3, awayIdx: 0, date: "27 de Junio" }, // Colombia vs Portugal
+            { group: "K", homeIdx: 1, awayIdx: 2, date: "27 de Junio" }  // RD Congo vs Uzbekistán
+        ];
+
+        const ALL_MATCHES = [];
+        const addMatches = (list, jornada) => {
+            list.forEach((m, idx) => {
+                const teams = WORLD_CUP_GROUPS[m.group];
+                const homeName = teams[m.homeIdx];
+                const awayName = teams[m.awayIdx];
+                ALL_MATCHES.push({
+                    id: `J${jornada}_M${idx + 1}`,
+                    jornada,
+                    group: m.group,
+                    home: homeName,
+                    away: awayName,
+                    date: m.date
+                });
+            });
+        };
+        addMatches(J1_MATCHES, 1);
+        addMatches(J2_MATCHES, 2);
+        addMatches(J3_MATCHES, 3);
+
+        // Mapeo ordenado de IDs para control de avance de inputs
+        const MATCH_IDS = ALL_MATCHES.map(m => m.id);
+
+        const calculatePoints = (pred, actual) => {
+            if (!pred || pred.home === '' || pred.away === '' || !actual || actual.home === '' || actual.away === '') return 0;
+            
+            const pH = parseInt(pred.home);
+            const pA = parseInt(pred.away);
+            const aH = parseInt(actual.home);
+            const aA = parseInt(actual.away);
+
+            let pts = 0;
+            const pOutcome = pH > pA ? 1 : (pH < pA ? -1 : 0);
+            const aOutcome = aH > aA ? 1 : (aH < aA ? -1 : 0);
+
+            const correctOutcome = pOutcome === aOutcome;
+            const correctH = pH === aH;
+            const correctA = pA === aA;
+
+            if (correctOutcome) pts += 1; 
+            if (correctH) pts += 1;       
+            if (correctA) pts += 1;       
+            if (correctOutcome && correctH && correctA) pts += 2; // Bono de +2 si atina todo
+
+            return pts;
+        };
+
+        const calculateGroupStandings = (groupName, predictions) => {
+            const teams = WORLD_CUP_GROUPS[groupName].map(name => ({
+                name, pts: 0, pld: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0
+            }));
+
+            // Procesar los 72 partidos pero filtrar solo los que pertenezcan a este grupo
+            const groupMatches = ALL_MATCHES.filter(m => m.group === groupName);
+
+            groupMatches.forEach(m => {
+                const pred = predictions[m.id];
+                if (pred && pred.home !== '' && pred.away !== '') {
+                    const hG = parseInt(pred.home);
+                    const aG = parseInt(pred.away);
+
+                    const tH = teams.find(t => t.name === m.home);
+                    const tA = teams.find(t => t.name === m.away);
+
+                    tH.pld++; tA.pld++;
+                    tH.gf += hG; tA.gf += aG;
+                    tH.ga += aG; tA.ga += hG;
+                    tH.gd = tH.gf - tH.ga;
+                    tA.gd = tA.gf - tA.ga;
+
+                    if (hG > aG) { tH.pts += 3; tH.w++; tA.l++; } 
+                    else if (hG < aG) { tA.pts += 3; tA.w++; tH.l++; } 
+                    else { tH.pts += 1; tA.pts += 1; tH.d++; tA.d++; }
+                }
+            });
+
+            return teams.sort((a, b) => {
+                if (b.pts !== a.pts) return b.pts - a.pts;
+                if (b.gd !== a.gd) return b.gd - a.gd;
+                return b.gf - a.gf;
+            });
+        };
+
+        const Icon = ({ name, className }) => {
+            switch (name) {
+                case 'check-circle':
+                    return <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>;
+                case 'trophy':
+                    return <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>;
+                case 'globe-2':
+                    return <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>;
+                case 'alert-triangle':
+                    return <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
+                case 'pen-square':
+                    return <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
+                case 'check-circle-2':
+                    return <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>;
+                case 'table':
+                    return <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="9" x2="9" y2="21"></line><line x1="15" y1="9" x2="15" y2="21"></line></svg>;
+                case 'shield-halved':
+                    return <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
+                default:
+                    return null;
+            }
+        };
+
+        const CountryFlag = ({ countryName, className = "w-8 h-5" }) => {
+            const code = COUNTRY_FLAGS_CODES[countryName];
+            if (!code) return <span className="text-xl">🏳️</span>;
+            
+            return (
+                <img 
+                    src={`https://flagcdn.com/${code}.svg`} 
+                    alt={countryName} 
+                    className={`${className} object-cover rounded shadow-md border border-slate-700/40 inline-block`}
+                    onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = `https://placehold.co/32x24/1e293b/ffffff?text=${code.toUpperCase()}`;
+                    }}
+                />
+            );
+        };
+
+        const GoalInput = ({ id, initialValue, onSave, onNext, disabled, placeholder }) => {
+            const [val, setVal] = React.useState(initialValue);
+
+            React.useEffect(() => {
+                setVal(initialValue);
+            }, [initialValue]);
+
+            const handleChange = (e) => {
+                const inputVal = e.target.value;
+                if (inputVal !== '' && !/^\d+$/.test(inputVal)) return;
+                
+                setVal(inputVal);
+                onSave(inputVal); // Guarda en el estado de memoria al instante
+
+                // Si ingresa un dígito (0-9), avanza automáticamente de campo
+                if (inputVal !== '') {
+                    setTimeout(() => {
+                        onNext();
+                    }, 100);
+                }
+            };
+
+            const handleBlur = () => {
+                onSave(val);
+            };
+
+            const handleKeyDown = (e) => {
+                if (e.key === 'Enter') {
+                    onSave(val);
+                    onNext();
+                }
+            };
+
+            return (
+                <input 
+                    id={id}
+                    type="tel" 
+                    pattern="[0-9]*"
+                    className={`w-12 h-12 text-center rounded-lg transition-all duration-150 ${
+                        disabled ? 'bg-gray-800 text-gray-500' : 'bg-slate-800 text-white focus:ring-2 focus:ring-emerald-400 focus:bg-slate-750'
+                    } border border-slate-700 font-bold text-lg`}
+                    value={val}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    onKeyDown={handleKeyDown}
+                    disabled={disabled}
+                    placeholder={placeholder}
+                />
+            );
+        };
+
+        const MatchRow = ({ match, type, predictions, realResults, handleUpdateGoals, handleNextFocus }) => {
+            const isReal = type === 'real';
+            const sourceData = isReal ? realResults : predictions;
+            const homeVal = sourceData[match.id]?.home ?? '';
+            const awayVal = sourceData[match.id]?.away ?? '';
+            
+            const actualRes = realResults[match.id];
+            const hasActualResult = actualRes && actualRes.home !== '' && actualRes.away !== '';
+            const isLocked = !isReal && hasActualResult;
+
+            let pointsEarned = null;
+            if (isLocked) {
+                pointsEarned = calculatePoints(sourceData[match.id], actualRes);
+            }
+
+            return (
+                <div className={`relative p-4 rounded-xl border transition-all duration-200 ${
+                    isLocked ? 'bg-slate-900/60 border-slate-700/50 opacity-90' : 'bg-slate-900/40 hover:bg-slate-900/50 border-slate-800'
+                } mb-4 flex items-center justify-between shadow-lg backdrop-blur-sm`}>
+                    
+                    {/* Indicador de Puntos y Marcador Real */}
+                    {isLocked && (
+                        <div className="absolute -top-3 right-3 bg-indigo-950/90 text-indigo-200 border border-indigo-700/50 text-xs px-3 py-1 rounded-full font-bold flex items-center shadow-md backdrop-blur-md">
+                            <Icon name="check-circle" className="w-3.5 h-3.5 mr-1 text-indigo-400" />
+                            {pointsEarned} Pts (Real: {actualRes.home}-{actualRes.away})
+                        </div>
+                    )}
+
+                    {/* Equipo Local */}
+                    <div className="flex-1 flex flex-col items-end mr-3 text-right">
+                        <span className="font-bold text-white text-sm sm:text-base leading-tight">
+                            {match.home}
+                        </span>
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                            <span className="text-[10px] text-slate-400 uppercase tracking-widest bg-slate-800/60 px-1.5 py-0.5 rounded font-bold">Grupo {match.group}</span>
+                            <CountryFlag countryName={match.home} className="w-7 h-4 sm:w-9 sm:h-5" />
+                        </div>
+                    </div>
+
+                    {/* Marcador */}
+                    <div className="flex items-center gap-2">
+                        <GoalInput 
+                            id={`input-${match.id}-home`}
+                            initialValue={homeVal}
+                            onSave={(val) => handleUpdateGoals(match.id, true, val, isReal)}
+                            onNext={() => handleNextFocus(match.id, true)}
+                            disabled={isLocked}
+                            placeholder="-"
+                        />
+                        <span className="text-slate-500 font-black">-</span>
+                        <GoalInput 
+                            id={`input-${match.id}-away`}
+                            initialValue={awayVal}
+                            onSave={(val) => handleUpdateGoals(match.id, false, val, isReal)}
+                            onNext={() => handleNextFocus(match.id, false)}
+                            disabled={isLocked}
+                            placeholder="-"
+                        />
+                    </div>
+
+                    {/* Equipo Visitante */}
+                    <div className="flex-1 flex flex-col items-start ml-3 text-left">
+                        <span className="font-bold text-white text-sm sm:text-base leading-tight">
+                            {match.away}
+                        </span>
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                            <CountryFlag countryName={match.away} className="w-7 h-4 sm:w-9 sm:h-5" />
+                            <span className="text-[10px] text-slate-400 font-bold">{match.date}</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [isReady, setIsReady] = React.useState(false);
+            const [userId, setUserId] = React.useState(null);
+            const [needsName, setNeedsName] = React.useState(false);
+            const [activeTab, setActiveTab] = React.useState('predicciones');
+            const [selectedJornada, setSelectedJornada] = React.useState(1);
+            
+            // Datos Locales Rápidos (React Memory State)
+            const [myPredictions, setMyPredictions] = React.useState({});
+            const [realResults, setRealResults] = React.useState({});
+            const [allUsers, setAllUsers] = React.useState({});
+            const [allPredictions, setAllPredictions] = React.useState({});
+
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'quiniela-mundial-26';
+            const saveTimeoutRef = React.useRef(null);
+
+            // Efecto para conectar Firebase Auth
+            React.useEffect(() => {
+                const init = async () => {
+                    const FB = window.FirebaseApp;
+                    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+                    const app = FB.initializeApp(firebaseConfig);
+                    window.db = FB.getFirestore(app);
+                    window.auth = FB.getAuth(app);
+
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await FB.signInWithCustomToken(window.auth, __initial_auth_token);
+                        } else {
+                            await FB.signInAnonymously(window.auth);
+                        }
+                    } catch (e) { console.error("Error Auth:", e); }
+
+                    FB.onAuthStateChanged(window.auth, (user) => {
+                        if (user) setUserId(user.uid);
+                    });
+                };
+
+                if (window.FirebaseApp) {
+                    init();
+                } else {
+                    window.addEventListener('firebase-ready', init);
+                }
+                return () => window.removeEventListener('firebase-ready', init);
+            }, []);
+
+            React.useEffect(() => {
+                if (!userId || !window.db) return;
+                const FB = window.FirebaseApp;
+
+                const unsubUser = FB.onSnapshot(
+                    FB.doc(window.db, 'artifacts', appId, 'public', 'data', 'users', userId),
+                    (docSnap) => {
+                        if (docSnap.exists() && docSnap.data().name) {
+                            setNeedsName(false);
+                            setIsReady(true);
+                        } else {
+                            setNeedsName(true);
+                            setIsReady(true);
+                        }
+                    },
+                    (err) => console.error(err)
+                );
+
+                const unsubMyPreds = FB.onSnapshot(
+                    FB.doc(window.db, 'artifacts', appId, 'public', 'data', 'predictions', userId),
+                    (docSnap) => {
+                        if (docSnap.exists()) {
+                            // Sólo actualiza si el usuario no está escribiendo activamente
+                            setMyPredictions(prev => {
+                                const incoming = docSnap.data();
+                                return { ...incoming, ...prev }; // Mantener datos locales en edición
+                            });
+                        }
+                    },
+                    (err) => console.error(err)
+                );
+
+                const unsubReal = FB.onSnapshot(
+                    FB.doc(window.db, 'artifacts', appId, 'public', 'data', 'settings', 'match_results'),
+                    (docSnap) => {
+                        if (docSnap.exists()) {
+                            setRealResults(prev => ({ ...docSnap.data(), ...prev }));
+                        }
+                    },
+                    (err) => console.error(err)
+                );
+
+                const unsubAllUsers = FB.onSnapshot(
+                    FB.collection(window.db, 'artifacts', appId, 'public', 'data', 'users'),
+                    (snap) => {
+                        const users = {};
+                        snap.forEach(d => users[d.id] = d.data());
+                        setAllUsers(users);
+                    },
+                    (err) => console.error(err)
+                );
+
+                const unsubAllPreds = FB.onSnapshot(
+                    FB.collection(window.db, 'artifacts', appId, 'public', 'data', 'predictions'),
+                    (snap) => {
+                        const preds = {};
+                        snap.forEach(d => preds[d.id] = d.data());
+                        setAllPredictions(preds);
+                    },
+                    (err) => console.error(err)
+                );
+
+                return () => {
+                    unsubUser(); unsubMyPreds(); unsubReal(); unsubAllUsers(); unsubAllPreds();
+                };
+            }, [userId, appId]);
+
+            const saveToFirebaseDebounced = React.useCallback((updatedData, isRealResult) => {
+                if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+                
+                saveTimeoutRef.current = setTimeout(async () => {
+                    const FB = window.FirebaseApp;
+                    try {
+                        if (isRealResult) {
+                            await FB.setDoc(FB.doc(window.db, 'artifacts', appId, 'public', 'data', 'settings', 'match_results'), updatedData, { merge: true });
+                        } else {
+                            await FB.setDoc(FB.doc(window.db, 'artifacts', appId, 'public', 'data', 'predictions', userId), updatedData, { merge: true });
+                        }
+                        console.log("Firebase sincronizado correctamente.");
+                    } catch (e) {
+                        console.error("Error al sincronizar con la nube:", e);
+                    }
+                }, 1500); // Retrasa el guardado 1.5s después de la última tecla escrita
+            }, [userId, appId]);
+
+            const saveName = async (name) => {
+                if (!name.trim()) return;
+                const FB = window.FirebaseApp;
+                await FB.setDoc(FB.doc(window.db, 'artifacts', appId, 'public', 'data', 'users', userId), { name: name.trim() });
+            };
+
+            const handleUpdateGoals = (matchId, isHome, value, isRealResult) => {
+                const field = isHome ? 'home' : 'away';
+
+                if (isRealResult) {
+                    const currentMatchData = realResults[matchId] || { home: '', away: '' };
+                    const updated = { ...realResults, [matchId]: { ...currentMatchData, [field]: value } };
+                    setRealResults(updated); // Actualiza la pantalla de inmediato sin lag
+                    saveToFirebaseDebounced(updated, true); // Guarda en background
+                } else {
+                    const currentMatchData = myPredictions[matchId] || { home: '', away: '' };
+                    const updated = { ...myPredictions, [matchId]: { ...currentMatchData, [field]: value } };
+                    setMyPredictions(updated); // Actualiza la pantalla de inmediato sin lag
+                    saveToFirebaseDebounced(updated, false); // Guarda en background
+                }
+            };
+
+            const handleNextFocus = (currentMatchId, isHome) => {
+                if (isHome) {
+                    // Si escribe en Local, salta al Visitante de ese mismo partido
+                    const nextInput = document.getElementById(`input-${currentMatchId}-away`);
+                    if (nextInput) {
+                        nextInput.focus();
+                        nextInput.select();
+                    }
+                } else {
+                    // Si escribe en Visitante, busca el siguiente partido en la lista
+                    const currentIndex = MATCH_IDS.indexOf(currentMatchId);
+                    if (currentIndex !== -1 && currentIndex < MATCH_IDS.length - 1) {
+                        const nextMatchId = MATCH_IDS[currentIndex + 1];
+                        const nextMatch = ALL_MATCHES[currentIndex + 1];
+
+                        // Si el siguiente partido pertenece a otra Jornada, la activamos automáticamente
+                        if (nextMatch.jornada !== selectedJornada) {
+                            setSelectedJornada(nextMatch.jornada);
+                        }
+
+                        // Esperamos un breve instante para dar tiempo a React de pintar la nueva tanda
+                        setTimeout(() => {
+                            const nextInput = document.getElementById(`input-${nextMatchId}-home`);
+                            if (nextInput) {
+                                nextInput.focus();
+                                nextInput.select();
+                                nextInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        }, 150);
+                    }
+                }
+            };
+
+            const renderMatchesList = (type) => {
+                const filteredMatches = ALL_MATCHES.filter(m => m.jornada === selectedJornada);
+                return (
+                    <div>
+                        {/* Selector de Jornada */}
+                        <div className="grid grid-cols-3 gap-2 mb-6 bg-slate-950/40 p-1.5 rounded-xl border border-slate-800/80">
+                            {[1, 2, 3].map(j => (
+                                <button
+                                    key={j}
+                                    onClick={() => setSelectedJornada(j)}
+                                    className={`py-2.5 px-3 rounded-lg text-xs font-black uppercase tracking-wider transition-all duration-150 ${
+                                        selectedJornada === j 
+                                            ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20' 
+                                            : 'text-slate-400 hover:text-white hover:bg-slate-900/40'
+                                    }`}
+                                >
+                                    Jornada {j}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Título de la Jornada */}
+                        <h3 className="text-sm font-black text-emerald-400 mb-4 uppercase tracking-widest flex items-center justify-between border-b border-slate-800 pb-2">
+                            <span>Calendario de Partidos - Jornada {selectedJornada}</span>
+                            <span className="text-slate-500 text-xs font-medium">
+                                {selectedJornada === 1 && "11 al 17 de Junio"}
+                                {selectedJornada === 2 && "18 al 23 de Junio"}
+                                {selectedJornada === 3 && "24 al 27 de Junio"}
+                            </span>
+                        </h3>
+
+                        {/* Listado de Partidos */}
+                        {filteredMatches.map(match => (
+                            <MatchRow 
+                                key={match.id} 
+                                match={match} 
+                                type={type} 
+                                predictions={myPredictions}
+                                realResults={realResults}
+                                handleUpdateGoals={handleUpdateGoals}
+                                handleNextFocus={handleNextFocus}
+                            />
+                        ))}
+                    </div>
+                );
+            };
+
+            const renderStandings = (predictionsSource, titleText) => {
+                return Object.keys(WORLD_CUP_GROUPS).map(group => {
+                    const table = calculateGroupStandings(group, predictionsSource);
+                    return (
+                        <div key={group} className="mb-8 bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden shadow-2xl backdrop-blur-md">
+                            <div className="bg-indigo-950/80 border-b border-slate-800 text-white p-4 font-black flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                                    <span>Grupo {group}</span>
+                                </div>
+                                <span className="text-xs font-semibold text-slate-400 italic">
+                                    {titleText}
+                                </span>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-950/50 text-slate-400 border-b border-slate-800">
+                                        <tr>
+                                            <th className="px-4 py-3">País</th>
+                                            <th className="px-2 py-3 text-center w-12" title="Puntos">Pts</th>
+                                            <th className="px-2 py-3 text-center w-12" title="Jugados">J</th>
+                                            <th className="px-2 py-3 text-center w-12" title="Diferencia de Goles">DG</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {table.map((team, idx) => (
+                                            <tr key={team.name} className={`border-b border-slate-800/50 last:border-0 ${idx < 2 ? 'bg-emerald-500/5' : ''}`}>
+                                                <td className="px-4 py-3 font-semibold flex items-center gap-3 text-slate-200">
+                                                    <span className={`font-black text-xs w-5 h-5 rounded-full flex items-center justify-center ${idx < 2 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>{idx + 1}</span>
+                                                    <CountryFlag countryName={team.name} className="w-6 h-4" />
+                                                    <span className="truncate">{team.name}</span>
+                                                </td>
+                                                <td className="px-2 py-3 text-center font-black text-emerald-400">{team.pts}</td>
+                                                <td className="px-2 py-3 text-center text-slate-400">{team.pld}</td>
+                                                <td className="px-2 py-3 text-center text-slate-400 font-bold">{team.gd > 0 ? `+${team.gd}` : team.gd}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    );
+                });
+            };
+
+            const renderLeaderboard = () => {
+                const board = Object.keys(allUsers).map(uid => {
+                    const uName = allUsers[uid].name;
+                    const uPreds = allPredictions[uid] || {};
+                    let totalPts = 0;
+                    let exactMatches = 0;
+
+                    Object.keys(realResults).forEach(matchId => {
+                        const actual = realResults[matchId];
+                        const pred = uPreds[matchId];
+                        if (actual && actual.home !== '' && actual.away !== '') {
+                            const pts = calculatePoints(pred, actual);
+                            totalPts += pts;
+                            if (pts === 5) exactMatches++;
+                        }
+                    });
+
+                    return { uid, name: uName, points: totalPts, exactMatches };
+                }).sort((a, b) => b.points - a.points);
+
+                return (
+                    <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-4 sm:p-6 shadow-2xl backdrop-blur-md">
+                        <div className="text-center mb-6">
+                            <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <Icon name="trophy" className="w-6 h-6" />
+                            </div>
+                            <h2 className="text-2xl font-black text-white">Marcador General</h2>
+                            <p className="text-slate-400 text-sm mt-1 font-medium">Reglas: Ganador (1 pt) | Goles de A (1 pt) | Goles de B (1 pt) | Acierto Total (+2 pts Bono). ¡Total de 5 pts!</p>
+                        </div>
+                        
+                        <div className="space-y-3">
+                            {board.map((user, idx) => (
+                                <div key={user.uid} className={`flex items-center justify-between p-4 rounded-lg border transition-all ${
+                                    idx === 0 ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-slate-950/40 border-slate-800/80'
+                                }`}>
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-slate-950 ${
+                                            idx === 0 ? 'bg-yellow-400' : (idx === 1 ? 'bg-slate-300' : 'bg-amber-600 text-white')
+                                        }`}>
+                                            {idx + 1}
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-white">{user.name}</p>
+                                            <p className="text-xs text-slate-400">{user.exactMatches} marcadores perfectos</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-2xl font-black text-emerald-400">{user.points}</p>
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Puntos</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            if (!isReady) {
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center text-emerald-400 font-bold gap-3">
+                        <div className="w-10 h-10 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+                        <span>Cargando Quiniela...</span>
+                    </div>
+                );
+            }
+
+            if (needsName) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+                        <div className="bg-slate-950/80 border border-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md relative z-10 text-center backdrop-blur-lg">
+                            <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Icon name="trophy" className="w-8 h-8" />
+                            </div>
+                            <h2 className="text-3xl font-black text-white mb-2 tracking-tight">Quiniela 2026</h2>
+                            <p className="text-slate-400 mb-8 text-sm">Ingresa tu apodo o nombre para entrar a competir con tu novia.</p>
+                            <input 
+                                type="text" 
+                                id="nameInput"
+                                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl p-4 mb-4 text-center font-bold text-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all"
+                                placeholder="Tu Apodo..."
+                                onKeyDown={(e) => { if(e.key === 'Enter') saveName(e.target.value) }}
+                            />
+                            <button 
+                                className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-4 rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                                onClick={() => saveName(document.getElementById('nameInput').value)}
+                            >
+                                ¡Comenzar Quiniela!
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen pb-24">
+                    {/* Header */}
+                    <div className="bg-slate-950/80 border-b border-slate-800 sticky top-0 z-40 backdrop-blur-md">
+                        <div className="max-w-3xl mx-auto px-4 py-4 flex justify-between items-center">
+                            <h1 className="text-xl font-black tracking-tight flex items-center gap-2 text-white">
+                                <span className="bg-emerald-500 text-slate-950 p-1.5 rounded-md text-sm"><Icon name="globe-2" className="w-5 h-5" /></span>
+                                Quiniela 2026
+                            </h1>
+                            <span className="text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full">
+                                Jugando como: {allUsers[userId]?.name}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Main Content */}
+                    <div className="max-w-3xl mx-auto px-4 py-6">
+                        {activeTab === 'predicciones' && (
+                            <div>
+                                <p className="text-slate-400 mb-6 text-sm">Ingresa tus predicciones personales. Al escribir, tu cursor se moverá automáticamente al siguiente equipo. Cuando el partido se juegue y se publique el marcador real, esta casilla se bloqueará y sumará tus puntos.</p>
+                                {renderMatchesList('prediction')}
+                            </div>
+                        )}
+                        {activeTab === 'resultados' && (
+                            <div>
+                                <div className="bg-amber-500/10 border border-amber-500/25 text-amber-300 p-4 rounded-xl mb-6 text-sm font-semibold flex items-start shadow-lg backdrop-blur-sm">
+                                    <Icon name="alert-triangle" className="inline w-5 h-5 mr-3 flex-shrink-0 text-amber-400" />
+                                    <span>
+                                        <strong>Resultados Oficiales:</strong> Registren aquí los resultados reales del mundial una vez que se hayan jugado los partidos. Esto bloqueará la predicción, guardará sus resultados de forma segura en la base de datos y asignará los puntos automáticamente.
+                                    </span>
+                                </div>
+                                {renderMatchesList('real')}
+                            </div>
+                        )}
+                        {activeTab === 'posiciones' && (
+                            <div>
+                                <p className="text-slate-400 mb-6 text-sm">Así se verían los grupos de la Copa Mundial basándose únicamente en tus predicciones actuales en tiempo real.</p>
+                                {renderStandings(myPredictions, "Tablas de Predicciones")}
+                            </div>
+                        )}
+                        {activeTab === 'posiciones_reales' && (
+                            <div>
+                                <p className="text-slate-400 mb-6 text-sm">Las posiciones reales de los grupos de la Copa Mundial basándose únicamente en los resultados ingresados que ya se jugaron.</p>
+                                {renderStandings(realResults, "Tablas Oficiales")}
+                            </div>
+                        )}
+                        {activeTab === 'ranking' && (
+                            <div>
+                                {renderLeaderboard()}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Bottom Navigation */}
+                    <div className="fixed bottom-0 left-0 right-0 bg-slate-950/95 border-t border-slate-850 z-50 px-1 pb-safe backdrop-blur-md">
+                        <div className="max-w-3xl mx-auto grid grid-cols-5 text-center">
+                            <button onClick={() => setActiveTab('predicciones')} className={`py-3.5 flex flex-col items-center gap-1 transition-colors ${activeTab === 'predicciones' ? 'text-emerald-400 font-bold' : 'text-slate-500'}`}>
+                                <Icon name="pen-square" className="w-5 h-5" />
+                                <span className="text-[9px] uppercase tracking-wider font-semibold truncate max-w-full">Mis Preds</span>
+                            </button>
+                            <button onClick={() => setActiveTab('resultados')} className={`py-3.5 flex flex-col items-center gap-1 transition-colors ${activeTab === 'resultados' ? 'text-emerald-400 font-bold' : 'text-slate-500'}`}>
+                                <Icon name="check-circle-2" className="w-5 h-5" />
+                                <span className="text-[9px] uppercase tracking-wider font-semibold truncate max-w-full">Resultados</span>
+                            </button>
+                            <button onClick={() => setActiveTab('posiciones')} className={`py-3.5 flex flex-col items-center gap-1 transition-colors ${activeTab === 'posiciones' ? 'text-emerald-400 font-bold' : 'text-slate-500'}`}>
+                                <Icon name="table" className="w-5 h-5" />
+                                <span className="text-[9px] uppercase tracking-wider font-semibold truncate max-w-full">Pos. Pred</span>
+                            </button>
+                            <button onClick={() => setActiveTab('posiciones_reales')} className={`py-3.5 flex flex-col items-center gap-1 transition-colors ${activeTab === 'posiciones_reales' ? 'text-emerald-400 font-bold' : 'text-slate-500'}`}>
+                                <Icon name="shield-halved" className="w-5 h-5" />
+                                <span className="text-[9px] uppercase tracking-wider font-semibold truncate max-w-full">Pos. Real</span>
+                            </button>
+                            <button onClick={() => setActiveTab('ranking')} className={`py-3.5 flex flex-col items-center gap-1 transition-colors ${activeTab === 'ranking' ? 'text-emerald-400 font-bold' : 'text-slate-500'}`}>
+                                <Icon name="trophy" className="w-5 h-5" />
+                                <span className="text-[9px] uppercase tracking-wider font-semibold truncate max-w-full">Marcador</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
